@@ -176,23 +176,25 @@
     <ul id="list"></ul>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script>
-    const STORAGE_KEY = 'shopping-list-items';
+    const SUPABASE_URL = 'https://zgzmecglawscjlimseny.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_8EQJfIpuG2Bdy-VJghSBgw_FZkABcEW';
+    const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    function loadItems() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        return raw ? JSON.parse(raw) : [];
-      } catch {
+    async function loadItems() {
+      const { data, error } = await db
+        .from('shopping_items')
+        .select('*')
+        .order('created_at', { ascending: true });
+      if (error) {
+        console.error(error);
         return [];
       }
+      return data;
     }
 
-    function saveItems(items) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    }
-
-    let items = loadItems();
+    let items = [];
 
     const listEl = document.getElementById('list');
     const inputEl = document.getElementById('item-input');
@@ -241,32 +243,52 @@
       countText.textContent = `총 ${items.length}개 (체크 ${checkedCount}개)`;
     }
 
-    function addItem() {
+    async function addItem() {
       const text = inputEl.value.trim();
       if (!text) return;
-      items.push({ id: Date.now() + Math.random(), text, checked: false });
-      saveItems(items);
+      const { error } = await db.from('shopping_items').insert({ text });
+      if (error) {
+        console.error(error);
+        return;
+      }
       inputEl.value = '';
-      render();
       inputEl.focus();
+      items = await loadItems();
+      render();
     }
 
-    function toggleItem(id) {
+    async function toggleItem(id) {
       const item = items.find((i) => i.id === id);
-      if (item) item.checked = !item.checked;
-      saveItems(items);
+      if (!item) return;
+      const { error } = await db
+        .from('shopping_items')
+        .update({ checked: !item.checked })
+        .eq('id', id);
+      if (error) {
+        console.error(error);
+        return;
+      }
+      items = await loadItems();
       render();
     }
 
-    function deleteItem(id) {
-      items = items.filter((i) => i.id !== id);
-      saveItems(items);
+    async function deleteItem(id) {
+      const { error } = await db.from('shopping_items').delete().eq('id', id);
+      if (error) {
+        console.error(error);
+        return;
+      }
+      items = await loadItems();
       render();
     }
 
-    function clearChecked() {
-      items = items.filter((i) => !i.checked);
-      saveItems(items);
+    async function clearChecked() {
+      const { error } = await db.from('shopping_items').delete().eq('checked', true);
+      if (error) {
+        console.error(error);
+        return;
+      }
+      items = await loadItems();
       render();
     }
 
@@ -276,7 +298,10 @@
     });
     clearCheckedBtn.addEventListener('click', clearChecked);
 
-    render();
+    (async () => {
+      items = await loadItems();
+      render();
+    })();
   </script>
 </body>
 </html>
